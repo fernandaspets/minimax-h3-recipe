@@ -7,7 +7,6 @@
 #
 #   H3_TASK_TYPE=ref2va|t2va|fl2va  default ref2va   (selects the served partition)
 #   H3_WIRE=bf16|int8              default bf16     (int8 a2a + all-reduce transport)
-#   H3_STATE_DIR=<dir>              default /var/lib/h3      (policy + control files)
 #   H3_MODEL_DIR=<dir>              default /models/MiniMaxAI/MiniMax-H3
 #   H3_LORA=<file>                  overrides the per-step default; the adapter family must match
 #                                   the partition (ref2v for ref2va, fl2v for t2va/fl2va)
@@ -24,7 +23,6 @@ H3_QUANT=${H3_QUANT:-mxfp8}
 H3_STEPS=${H3_STEPS:-4}
 H3_WEIGHTS_SOURCE=${H3_WEIGHTS_SOURCE:-local}
 H3_TASK_TYPE=${H3_TASK_TYPE:-ref2va}
-H3_STATE_DIR=${H3_STATE_DIR:-/var/lib/h3}
 H3_MODEL_DIR=${H3_MODEL_DIR:-/models/MiniMaxAI/MiniMax-H3}
 H3_LORA_DIR=${H3_LORA_DIR:-/models/h3/turbo}
 
@@ -40,16 +38,19 @@ esac
 export H3_PARTITION
 
 # ------------------------------------------------------------------ wire transport
-# The int8 transports are opt-in and lossy; bf16 is the stock vLLM path. One knob writes both
-# control files, so the wire cannot half-apply.
+# The int8 transports are opt-in and lossy; bf16 is the stock vLLM path. One knob sets both
+# transports, so the wire cannot half-apply.
+#
+# These env vars are what the model reads (a2a_wire._wire / ar_wire._wire). The control-file
+# plane that used to carry this choice was removed, so H3_WIRE must export them: writing a file
+# to the old state dir would now be silently inert and an int8 arm would quietly run bf16.
 H3_WIRE=${H3_WIRE:-bf16}
 case "$H3_WIRE" in
   bf16|int8) ;;
   *) _h3_die "unknown H3_WIRE='$H3_WIRE' (want bf16|int8)" ;;
 esac
-mkdir -p "$H3_STATE_DIR/control"
-printf '%s\n' "$H3_WIRE" > "$H3_STATE_DIR/control/A2A_WIRE_MODE"
-printf '%s\n' "$H3_WIRE" > "$H3_STATE_DIR/control/AR_WIRE_MODE"
+export H3_A2A_WIRE=${H3_A2A_WIRE:-$H3_WIRE}
+export H3_AR_WIRE=${H3_AR_WIRE:-$H3_WIRE}
 
 # ------------------------------------------------------------------ quantisation arm
 # Per-role policy, one line per role: mlp / attn / refiner.

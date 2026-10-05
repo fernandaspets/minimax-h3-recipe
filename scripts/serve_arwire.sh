@@ -5,7 +5,6 @@
 #   H3_QUANT / H3_STEPS / H3_WEIGHTS_SOURCE / H3_TASK_TYPE   see h3_lane_env.sh
 #   H3_TOPOLOGY=tp2usp2|usp4|tp4|tp1usp2   default tp2usp2
 #   H3_CACHE_DIR=<dir>    compile caches   default /var/cache/h3
-#   H3_STATE_DIR=<dir>    control files    default /var/lib/h3
 #
 # Attention backends: body SOL_ATTN, refiner B12X, everything else B12X.
 set -euo pipefail
@@ -15,7 +14,6 @@ export VLLM_WORKER_MULTIPROC_METHOD=spawn
 export VLLM_OMNI_VIDEO_SYNC_TIMEOUT=${VLLM_OMNI_VIDEO_SYNC_TIMEOUT:-14400}
 
 H3_CACHE_DIR=${H3_CACHE_DIR:-/var/cache/h3}
-H3_STATE_DIR=${H3_STATE_DIR:-/var/lib/h3}
 
 # LIL NCCL 2.31.2 ships with the runtime and provides the sm120 devComm API the fused all-to-all
 # permute needs. Without it the lane silently uses the system NCCL and that permute fails. Must be
