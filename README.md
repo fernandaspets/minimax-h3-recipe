@@ -153,7 +153,7 @@ Output geometry: 1344×768 at 24 fps, frames quantised to `17n+5` (5.0 s → 124
 ## Measured
 
 All numbers are engine time for 3 warm requests after a cold warmup, 1344×768, 4 steps, one writer
-(no scheduler queue wait). 480 W power limit unless noted.
+(no scheduler queue wait). 480 W power limit.
 
 | arm | engine, 3 warm requests | s/it | clip bytes |
 |---|---|---|---|
@@ -165,9 +165,7 @@ All numbers are engine time for 3 warm requests after a cold warmup, 1344×768, 
 Each arm is three warm requests after a cold warmup, same seed and geometry, so a rerun on the same
 hardware should land in the same band; the int8 arms render byte-identical clips run to run.
 
-The wire change accounts for ~4.2 s per clip, the quant policy a further ~0.9 s. The 600 W power
-limit measured 13.58–13.90 s but was reverted: it was a cross-boot comparison inside the ±10–15 %
-run-to-run band, so it is not counted as a gain.
+The wire change accounts for ~4.2 s per clip, the quant policy a further ~0.9 s.
 
 ## Knobs
 
@@ -200,7 +198,6 @@ Recorded so the same ground is not re-covered; each was measured on this lane an
 | `H3_A2A_PERMUTE=1` | rejected; the permute puts bf16 back on the wire (+2.5 s/clip) |
 | `H3_A2A_WIRE_BUFCACHE=1` | corrupts the clip (deterministic colour mosaic, still exits 0) |
 | 2-step student (`H3_STEPS=2`) | faster (8.85 s MXFP8 / 8.25 s NVFP4) but rejected on output quality |
-| 600 W power limit | 13.58–13.90 s, inside the run-to-run band; reverted as noise |
 | `H3_TOPOLOGY=usp4` / `tp4` | both ~1.7× slower; TP2 × USP2 is optimal from both sides |
 | `TORCHINDUCTOR_CUDAGRAPH_TREES=1` | no gain, and it breaks the VAE on this lane |
 | SOL_ATTN Q_TILE variant | slower; the shipped Triton forward stays |
