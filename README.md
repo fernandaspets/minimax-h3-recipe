@@ -1,4 +1,4 @@
-# MiniMax-H3 ref2va lane
+# MiniMax-H3 serving recipe
 
 Container build and run recipe for serving MiniMax-H3 on 4× RTX PRO 6000 Blackwell (SM120).
 
@@ -12,7 +12,7 @@ revision, or vendored in this directory with its licence. Model weights are not 
 | [vllm-project/vllm-omni #8490](https://github.com/vllm-project/vllm-omni/pull/8490) | B12X (SM120/SM121) attention backends, SOL_ATTN backend, opt-in MXFP8/NVFP4 paths, the `vllm_omni/diffusion/h3` runtime modules |
 | [vllm-project/vllm-omni #8491](https://github.com/vllm-project/vllm-omni/pull/8491) | communicator binding to the rank device for symmetric memory (not built into this image) |
 | [local-inference-lab/b12x #482](https://github.com/local-inference-lab/b12x/pull/482) | var-length attention with per-head block lists (opt-in) |
-| this PR | the image recipe: pinned inputs, vendored third-party, hashed lock, launcher and request examples |
+| this repo | the image recipe: pinned inputs, vendored third-party, hashed lock, launcher and request examples |
 
 ## Requirements
 
