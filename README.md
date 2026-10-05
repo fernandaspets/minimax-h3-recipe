@@ -9,7 +9,7 @@ revision, or vendored in this directory with its licence. Model weights are not 
 
 | component | what it provides |
 |---|---|
-| [vllm-project/vllm-omni #8490](https://github.com/vllm-project/vllm-omni/pull/8490) | B12X (SM120/SM121) attention backends, SOL_ATTN backend, opt-in MXFP8/NVFP4 paths, the `vllm_omni/diffusion/h3` runtime modules |
+| [vllm-project/vllm-omni #8490](https://github.com/vllm-project/vllm-omni/pull/8490) | B12X (SM120/SM121) attention backends, SOL_ATTN backend, opt-in MXFP8/NVFP4 paths, the `vllm_omni/diffusion/models/minimax_h3` wire + quantisation modules |
 | [vllm-project/vllm-omni #8491](https://github.com/vllm-project/vllm-omni/pull/8491) | communicator binding to the rank device for symmetric memory (not built into this image) |
 | [local-inference-lab/b12x #482](https://github.com/local-inference-lab/b12x/pull/482) | var-length attention with per-head block lists (opt-in) |
 | this repo | the image recipe: pinned inputs, vendored third-party, hashed lock, launcher and request examples |

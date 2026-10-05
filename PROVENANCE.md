@@ -9,7 +9,7 @@ local path; there are no private images and no out-of-tree `PYTHONPATH` shims.
 |---|---|---|---|---|
 | 1 | **runtime base** | `ghcr.io/local-inference-lab/vllm` | `@sha256:90be19874c57eb31ac9ba20d7d56ae5b39c09e748e8fdfd4e16b79be2e5faab9` (`karmic-kraken-beta-20261004-6f4bbe44d12bb604`) | the LIL CUDA 13.4 runtime. Anonymous pull verified with `docker manifest inspect` on a host with no registry credentials. |
 | 2 | **torchaudio** | `download-r2.pytorch.org` (PyTorch nightly) | `torchaudio-2.11.0.dev20261001+cu134-cp310-abi3-manylinux_2_28_x86_64.whl`, pinned by URL **and** sha256 `46ccf9f6e814972b4a4a85eaadab38f0c049dac05e794624bcffdbdf7e5fb49e` | the LIL runtime drops torchaudio but the H3 audio VAE needs it (`vae.py: encode_waveform`), and no wheel in the runtime matches this torch ABI. Fetched from the public nightly index and installed `--no-deps`, so torch still comes from the runtime. |
-| 3 | **vllm-omni** | `https://github.com/fernandaspets/vllm-omni` | branch `h3/features`, SHA recorded in the build log | our fork; upstream PR [vllm-project/vllm-omni#8490](https://github.com/vllm-project/vllm-omni/pull/8490). Contains the B12X backend, the sol_attn backend, the A2A permute, the MiniMax-H3 model changes, the prequant checkpoints, and the lane's wire + quantisation package `vllm_omni/diffusion/h3/`. |
+| 3 | **vllm-omni** | `https://github.com/fernandaspets/vllm-omni` | branch `h3/features`, SHA recorded in the build log | our fork; upstream PR [vllm-project/vllm-omni#8490](https://github.com/vllm-project/vllm-omni/pull/8490). Contains the B12X backend, the sol_attn backend, the A2A permute, the MiniMax-H3 model changes, the prequant checkpoints, and the lane's wire + quantisation modules under `vllm_omni/diffusion/models/minimax_h3/`. |
 | 4 | **b12x** | `https://github.com/fernandaspets/b12x` | branch `feat/video-block-sparse`, SHA recorded in the build log | our fork; upstream PR [local-inference-lab/b12x#482](https://github.com/local-inference-lab/b12x/pull/482). The SM120/SM121 kernel library. |
 | 5 | **sol_attn** | `third_party/sol_attn/` **in this repo** | vendored | third-party from NVlabs/Sana `sol-engine`, Apache-2.0, with its own `THIRD_PARTY_NOTICES.md`. Vendored rather than fetched: the revision the lane ran predates the upstream autotune change (`key=["T"]` → `key=["N"]`), so pinning current upstream would change numerics. |
 | 6 | **python dependencies** | PyPI | `requirements.lock` (**82 entries, every one with a SHA-256 hash**) | **only packages the runtime does not ship**, installed with `--require-hashes --no-deps`: every entry is either absent from the base or already present there at exactly this version, so the install cannot move a package the runtime owns. `runtime-dist.json` (the base's 339 distributions) plus `scripts/gate_runtime.py` prove it at build time. See *Build invariants*. |
@@ -20,8 +20,8 @@ local path; there are no private images and no out-of-tree `PYTHONPATH` shims.
 ## What is deliberately *not* here
 
 - **No `PYTHONPATH` shim.** The lane's wire and quantisation modules used to be loose files on
-  `PYTHONPATH`; they now live in the package as `vllm_omni/diffusion/h3/`, so a checkout of the branch
-  is everything needed.
+  `PYTHONPATH`; they now live in the model package as
+  `vllm_omni/diffusion/models/minimax_h3/`, so a checkout of the branch is everything needed.
 - **No model weights.** A 269 GB download does not belong in an image layer. See `WEIGHTS.md`.
 - **No identity RefMods.** They are not published; the lane boots and renders without them. See
   `WEIGHTS.md` for what they add and what is lost.
@@ -31,10 +31,11 @@ local path; there are no private images and no out-of-tree `PYTHONPATH` shims.
 The image is only as reproducible as the runtime it layers on, so the build asserts three things and
 fails rather than shipping an image that lies about itself:
 
-1. **import gate** - `vllm`, `b12x`, `vllm_omni`, the three `vllm_omni.diffusion.h3` modules,
-   `sol_attn` and `torchaudio` all import inside the image.
-2. **wire gate** - `vllm_omni/diffusion/distributed/comm.py` still imports `a2a_wire` from
-   `vllm_omni.diffusion.h3`, i.e. the int8 all-to-all hook survived the install.
+1. **import gate** - `vllm`, `b12x`, `vllm_omni`, the `vllm_omni.diffusion.models.minimax_h3`
+   wire and quantisation modules, `sol_attn` and `torchaudio` all import inside the image.
+2. **wire gate** - the generic `vllm_omni/diffusion/distributed/comm.py` exposes the
+   `register_seq_all_to_all_backend` hook and names no model: the H3 transport is installed from
+   the model side, so the generic layer stays model-agnostic after the install.
 3. **runtime gate** - each of the 339 distributions the base shipped is still at its original version
    (`runtime-dist.json` + `scripts/gate_runtime.py`; the single allow-listed change is `b12x`,
    replaced on purpose by the pinned PR branch).

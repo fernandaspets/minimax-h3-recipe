@@ -79,12 +79,16 @@ case "${H3_HF_CACHE_MOUNT%%:*}" in
   /*|~*) mkdir -p "${H3_HF_CACHE_MOUNT%%:*}" 2>/dev/null || true ;;
 esac
 MOUNTS=(-v "$H3_HF_CACHE_MOUNT")
+# The request runs INSIDE the container but writes the clip to the host's receipt directory, so
+# that directory has to be visible there at the same path. Mounting it here means a caller only
+# sets H3_RUN_DIR and does not have to remember to add the mount.
+MOUNTS+=(-v "$RUN:$RUN")
 for _spec in ${H3_MOUNTS:-}; do MOUNTS+=(-v "$_spec"); done
 
 # Refuse to serve from an image whose payload cannot import: a build that cannot import is a failed
 # build, not a lane to debug.
-if ! docker run --rm --entrypoint /opt/venv/bin/python "${MOUNTS[@]}" "local/h3kk:$TAG" \
-     -c "import vllm_omni" 2>"$RUN/import.err"; then
+if ! docker run --rm --gpus "\"device=$GPUS\"" --entrypoint /opt/venv/bin/python "${MOUNTS[@]}" "local/h3kk:$TAG" \
+     -c "import vllm_omni; from vllm_omni.diffusion.models.minimax_h3 import a2a_wire, ar_wire, a2a_qkv_batch, nvfp4, vae_sm120" 2>"$RUN/import.err"; then
   echo "[e2e] FAIL: import gate"; tail -5 "$RUN/import.err"; exit 1
 fi
 echo "[e2e] import gate: ok"

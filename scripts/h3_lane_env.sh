@@ -56,30 +56,15 @@ printf '%s\n' "$H3_WIRE" > "$H3_STATE_DIR/control/AR_WIRE_MODE"
 case "$H3_QUANT" in
   mxfp8)
     export VLLM_OMNI_DIT_MXFP8=1 VLLM_OMNI_DIT_NVFP4=0
-    _h3_policy="mlp mxfp8
-attn mxfp8
-refiner bf16"
     ;;
   hybrid)
     export VLLM_OMNI_DIT_MXFP8=1 VLLM_OMNI_DIT_NVFP4=1
-    _h3_policy="mlp nvfp4
-attn mxfp8
-refiner bf16"
     ;;
   nvfp4)
     export VLLM_OMNI_DIT_MXFP8=0 VLLM_OMNI_DIT_NVFP4=1
-    _h3_policy="mlp nvfp4
-attn nvfp4
-refiner bf16"
     ;;
   *) _h3_die "unknown H3_QUANT='$H3_QUANT' (want mxfp8|hybrid|nvfp4)" ;;
 esac
-
-# The env gates only enable the classes; the policy file is what the model resolves. Both must agree.
-_h3_policy_file="$H3_STATE_DIR/arms/$H3_QUANT/QUANT_POLICY"
-mkdir -p "$(dirname "$_h3_policy_file")"
-printf '%s\n' "$_h3_policy" > "$_h3_policy_file"
-export H3_QUANT_POLICY_CONTROL="$_h3_policy_file"
 
 # ------------------------------------------------------------------ step arm
 # The turbo adapters declare a task family and bind only to the matching partition: a ref2v adapter
@@ -126,7 +111,6 @@ export H3_REFMOD_NORMALIZE=${H3_REFMOD_NORMALIZE:-1}
 
 # ------------------------------------------------------------------ report
 echo "[h3_lane_env] arm: quant=$H3_QUANT steps=$H3_STEPS wire=$H3_WIRE weights=$H3_WEIGHTS_SOURCE task=$H3_TASK_TYPE (partition=$H3_PARTITION)"
-echo "[h3_lane_env]   policy      : $(tr '\n' ' ' < "$_h3_policy_file")"
 echo "[h3_lane_env]   dit gates   : MXFP8=$VLLM_OMNI_DIT_MXFP8 NVFP4=$VLLM_OMNI_DIT_NVFP4"
 echo "[h3_lane_env]   lora        : $H3_LORA"
 echo "[h3_lane_env]   model       : $MODEL"

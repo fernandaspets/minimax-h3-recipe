@@ -55,12 +55,8 @@ if [ "$H3_VAE_COMPILE" = "1" ]; then
   export MINIMAX_H3_VAE_DECODER_VIT_FF_TORCH_COMPILE_FULLGRAPH=${H3_VAE_COMPILE_FULLGRAPH:-0}
 fi
 
-# Wire transports, driven by control files so one boot can A/B both. Defaults are the stock bf16
-# path, so a missing control file falls back to stock rather than to a lossy arm.
-export H3_A2A_QKV_BATCH_CONTROL=${H3_A2A_QKV_BATCH_CONTROL:-$H3_STATE_DIR/control/A2A_QKV_BATCH}
-export H3_A2A_WIRE_CONTROL=${H3_A2A_WIRE_CONTROL:-$H3_STATE_DIR/control/A2A_WIRE_MODE}
-export H3_AR_WIRE_CONTROL=${H3_AR_WIRE_CONTROL:-$H3_STATE_DIR/control/AR_WIRE_MODE}
-mkdir -p "$H3_STATE_DIR/control"
+# Wire transports. Each arm is selected only by its own variable, fixed for the whole boot; the
+# defaults are the stock bf16 path, so a boot with nothing set runs the unchanged pipeline.
 export H3_A2A_QKV_BATCH=${H3_A2A_QKV_BATCH:-0}
 export H3_A2A_WIRE=${H3_A2A_WIRE:-bf16}
 export H3_AR_WIRE=${H3_AR_WIRE:-bf16}
@@ -86,7 +82,7 @@ ATTN='{"default": {"backend": "B12X"},
 
 echo "=== MiniMax-H3 lane: body=SOL_ATTN refiner=B12X task=$H3_TASK_TYPE ==="
 echo "    torch=$(python -c 'import torch;print(torch.__version__)') cuda=$(python -c 'import torch;print(torch.version.cuda)')"
-echo "    a2a wire=$(cat "$H3_A2A_WIRE_CONTROL" 2>/dev/null || echo bf16) ar wire=$(cat "$H3_AR_WIRE_CONTROL" 2>/dev/null || echo bf16) linear=${H3_LINEAR_ARM:-mxfp8}"
+echo "    a2a wire=$H3_A2A_WIRE ar wire=$H3_AR_WIRE qkv_batch=$H3_A2A_QKV_BATCH linear=${H3_LINEAR_ARM:-mxfp8}"
 
 # The turbo adapter family must match the partition (ref2v for Ref2VA, fl2v for FL2VA); the model
 # rejects a mismatch at boot. Empty means no adapter, which the served partition may not support.

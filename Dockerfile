@@ -106,9 +106,16 @@ RUN chmod +x /opt/h3/scripts/*.sh /opt/h3/scripts/*.py 2>/dev/null || true
 #    --no-deps install of vllm-omni adds "requires X, not installed" lines by construction. The
 #    invariant that must actually hold is that the runtime's version set survives unchanged.
 COPY runtime-dist.json /tmp/runtime-dist.json
-RUN /opt/venv/bin/python -c "import importlib; [importlib.import_module(m) for m in ('vllm','b12x','vllm_omni','vllm_omni.diffusion.h3.a2a_wire','vllm_omni.diffusion.h3.quant_policy','vllm_omni.diffusion.h3.nvfp4','sol_attn','torchaudio')] ; import sol_attn.interface as _i ; assert (12,0) not in _i._CUTE_BACKENDS, 'SM120 must fall back to the Triton backend: (12,0) is in _CUTE_BACKENDS but sol_attn ships no sm120 kernel' ; print('import gate: ok (SM120 -> triton)')" \
- && grep -q "from vllm_omni.diffusion.h3 import a2a_wire" /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/distributed/comm.py \
- && echo "wire gate: ok" \
+RUN /opt/venv/bin/python -c "import importlib; [importlib.import_module(m) for m in ('vllm','b12x','vllm_omni','sol_attn','torchaudio')] ; import sol_attn.interface as _i ; assert (12,0) not in _i._CUTE_BACKENDS, 'SM120 must fall back to the Triton backend: (12,0) is in _CUTE_BACKENDS but sol_attn ships no sm120 kernel' ; print('import gate: ok (SM120 -> triton)')" \
+ && /opt/venv/bin/python -m py_compile \
+      /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/models/minimax_h3/a2a_wire.py \
+      /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/models/minimax_h3/a2a_qkv_batch.py \
+      /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/models/minimax_h3/ar_wire.py \
+      /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/models/minimax_h3/nvfp4.py \
+      /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/models/minimax_h3/vae_sm120.py \
+ && grep -q "register_seq_all_to_all_backend" /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/distributed/comm.py \
+ && ! grep -qE "diffusion\.h3|minimax_h3" /opt/venv/lib/python3.12/site-packages/vllm_omni/diffusion/distributed/comm.py \
+ && echo "wire gate: ok (the model registers its own transport; the generic layer names no model)" \
  && /opt/venv/bin/python /opt/h3/scripts/gate_runtime.py /tmp/runtime-dist.json \
  && rm -f /tmp/runtime-dist.json
 
