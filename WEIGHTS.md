@@ -1,8 +1,8 @@
 # WEIGHTS — what to download, from where, and what is optional
 
 The image contains **no model weights**. They are a ~270 GB download and belong in a cache, not an
-image layer. Everything below is a public Hugging Face repository except the RefMods, which are
-explicitly optional.
+image layer. Everything below is a public Hugging Face repository except the identity RefMods, which are
+optional per-subject assets you supply yourself.
 
 ## Required
 
@@ -28,17 +28,31 @@ separate download. The image's `scripts/ref2va/` holds the wrapper; point it at 
 
 ## Optional — identity RefMods
 
-| what | where |
-|---|---|
-| `minimaxh3_rocco_v2_refmod.safetensors`, `minimaxh3_roxy_v2_refmod.safetensors` | **not published** — produced locally from the pack's reference photos |
+A RefMod is an identity adapter: one pre-encoded latent in the H3 video-VAE latent space, injected as
+reference rows because it cannot be decoded back through the VAE. It pins one subject's identity
+across shots. **None are shipped here** — they are per-subject assets you produce or obtain yourself.
 
-They are identity adapters for the two dogs. **The lane boots and renders without them**; what is
-lost is character consistency between shots — Rocco and Roxy come from the scene description and the
-reference images instead of a fixed identity.
+**Not required to run.** Without them the lane boots and renders; identity then comes from the prompt
+and any reference images, so it drifts between shots. Add them when you want a fixed character.
 
-To publish them, upload the two `*_v2_refmod.safetensors` files to a Hugging Face repo and set
-`H3_REFMOD_PATHS` to that repo's snapshot path. Until then, document them as required-for-consistency,
-not required-to-run.
+To use one or more:
+
+1. Put each subject's `.safetensors` where the container can read it. Each file holds a single tensor
+   named `latent` — the pre-encoded identity latent (4-D is accepted; the batch axis is added).
+2. Mount them and set `H3_REFMOD_PATHS` to the in-container paths, as an `os.pathsep`-separated list:
+
+```bash
+docker run ... \
+  -v /your/refmods:/refmods:ro \
+  -e H3_REFMOD_PATHS=/refmods/alice.safetensors:/refmods/bob.safetensors \
+  --entrypoint bash local/h3kk:h3 -lc 'bash /opt/h3/scripts/serve_arwire.sh'
+```
+
+They are appended as reference rows in the order given, so that order is a property of the request.
+
+`H3_REFMOD_NORMALIZE` (default on, set by the launcher) applies `(latent - mean) / std` before
+patchifying, the same treatment the model's own image path applies. Set it to `0` if your latents are
+already normalised.
 
 ## Pointing the lane at the weights
 
