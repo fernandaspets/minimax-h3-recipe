@@ -40,8 +40,8 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked /opt/venv/bin/pyth
 # declaration, so declaring the source revisions above the system packages made each branch push
 # rebuild apt and the whole dependency lock. These change on every push; the base layers do not.
 # Sources are the online pull requests, not this machine:
-#   vllm-project/vllm-omni #8487 / #8486   head: fernandaspets/vllm-omni h3/features
-#   local-inference-lab/b12x #480          head: fernandaspets/b12x feat/video-block-sparse
+#   vllm-project/vllm-omni #8490   head: fernandaspets/vllm-omni h3/features
+#   local-inference-lab/b12x #482  head: fernandaspets/b12x feat/video-block-sparse
 # build.sh resolves the head commits at build time; override the ARGs to build from upstream.
 ARG VLLM_OMNI_REPO=https://github.com/fernandaspets/vllm-omni
 ARG VLLM_OMNI_SHA=PLACEHOLDER_VLLM

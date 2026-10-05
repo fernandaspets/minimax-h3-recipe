@@ -7,9 +7,8 @@ cd "$(dirname "$0")"
 TAG=${1:-h3-repro}
 # The revisions are the heads of the online pull requests, resolved here so the pins can never
 # drift from what was reviewed:
-#   vllm-project/vllm-omni #8487  B12X/SOL_ATTN backends, opt-in MXFP8/NVFP4, the H3 modules
-#   vllm-project/vllm-omni #8486  the communicator binds to the rank device
-#   local-inference-lab/b12x #480  var-length attention with per-head block lists
+#   vllm-project/vllm-omni #8490  B12X/SOL_ATTN backends, opt-in MXFP8/NVFP4, the H3 modules
+#   local-inference-lab/b12x #482  var-length attention with per-head block lists
 # Point *_REPO / *_REF at upstream once they merge.
 VLLM_OMNI_REPO=${VLLM_OMNI_REPO:-https://github.com/fernandaspets/vllm-omni}
 VLLM_OMNI_REF=${VLLM_OMNI_REF:-refs/heads/h3/features}

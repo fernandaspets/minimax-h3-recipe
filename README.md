@@ -9,9 +9,9 @@ revision, or vendored in this directory with its licence. Model weights are not 
 
 | component | what it provides |
 |---|---|
-| [vllm-project/vllm-omni #8487](https://github.com/vllm-project/vllm-omni/pull/8487) | B12X (SM120/SM121) attention backends, SOL_ATTN backend, opt-in MXFP8/NVFP4 paths, the `vllm_omni/diffusion/h3` runtime modules |
-| [vllm-project/vllm-omni #8486](https://github.com/vllm-project/vllm-omni/pull/8486) | communicator binding to the rank device for symmetric memory |
-| [local-inference-lab/b12x #480](https://github.com/local-inference-lab/b12x/pull/480) | var-length attention with per-head block lists (opt-in) |
+| [vllm-project/vllm-omni #8490](https://github.com/vllm-project/vllm-omni/pull/8490) | B12X (SM120/SM121) attention backends, SOL_ATTN backend, opt-in MXFP8/NVFP4 paths, the `vllm_omni/diffusion/h3` runtime modules |
+| [vllm-project/vllm-omni #8491](https://github.com/vllm-project/vllm-omni/pull/8491) | communicator binding to the rank device for symmetric memory (not built into this image) |
+| [local-inference-lab/b12x #482](https://github.com/local-inference-lab/b12x/pull/482) | var-length attention with per-head block lists (opt-in) |
 | this PR | the image recipe: pinned inputs, vendored third-party, hashed lock, launcher and request examples |
 
 ## Requirements
@@ -33,9 +33,12 @@ reviewed.
 
 | source | revision built |
 |---|---|
-| [vllm-project/vllm-omni #8487](https://github.com/vllm-project/vllm-omni/pull/8487) | `fernandaspets/vllm-omni` `h3/features` |
-| [vllm-project/vllm-omni #8486](https://github.com/vllm-project/vllm-omni/pull/8486) | same branch |
-| [local-inference-lab/b12x #480](https://github.com/local-inference-lab/b12x/pull/480) | `fernandaspets/b12x` `feat/video-block-sparse` |
+| [vllm-project/vllm-omni #8490](https://github.com/vllm-project/vllm-omni/pull/8490) | `fernandaspets/vllm-omni` `h3/features` |
+| [local-inference-lab/b12x #482](https://github.com/local-inference-lab/b12x/pull/482) | `fernandaspets/b12x` `feat/video-block-sparse` |
+
+The image does not take [vllm-project/vllm-omni #8491](https://github.com/vllm-project/vllm-omni/pull/8491)
+(the communicator binding): on this runtime the served topology resolves its groups through plain
+NCCL, and the renders below were verified without it.
 
 To build from somewhere else — upstream once these merge, or a mirror — override the four knobs.
 Nothing else is read from the host:
