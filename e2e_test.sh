@@ -144,13 +144,18 @@ docker exec \
   -e H3_AUDIO_FILE="$H3_AUDIO_FILE" -e H3_INPUT_IMAGES="$H3_INPUT_IMAGES" -e PORT=8000 \
   "$NAME" bash /opt/h3/scripts/request_render.sh "$OUT" "$H3_STEPS" 12.0 3.0 5.0 2>&1 \
   | tail -8 | tee "$RUN/request.log"
+REQ_RC=${PIPESTATUS[0]}
+if [ "$REQ_RC" -ne 0 ]; then
+  echo "[e2e] FAIL: the request returned rc=$REQ_RC (see $RUN/request.log)"
+  exit 1
+fi
 
 if [ ! -s "$OUT" ]; then
   echo "[e2e] FAIL: no clip produced (see $RUN/request.log)"
   exit 1
 fi
 
-echo "[e2e] --- artifact verification (not the exit code) ---"
+echo "[e2e] --- artifact verification ---"
 BYTES=$(stat -c %s "$OUT"); SHA=$(sha256sum "$OUT" | cut -d' ' -f1)
 printf "  clip:   %s\n  bytes:  %s\n  sha256: %s\n" "$OUT" "$BYTES" "$SHA"
 if [ -n "${H3_EXPECT_BYTES:-}" ]; then
@@ -160,6 +165,23 @@ if [ -n "${H3_EXPECT_BYTES:-}" ]; then
     echo "  RENDER: differs from the recorded reference (expected $H3_EXPECT_BYTES, got $BYTES)"
   fi
 fi
+# A response body is not an artifact. curl --fail-with-body writes the HTTP error body straight to
+# $OUT, so "the file exists and is non-empty" is not enough: require a decodable video stream and a
+# real duration before this run may call itself a pass.
+if ! ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$OUT" \
+     2>"$RUN/ffprobe.err" | grep -q .; then
+  echo "[e2e] FAIL: the artifact is not a decodable video"
+  echo "  first 200 bytes: $(head -c 200 "$OUT")"
+  tail -3 "$RUN/ffprobe.err" | sed 's/^/  /'
+  exit 1
+fi
+VSTREAM=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$OUT" 2>/dev/null | head -1)
+DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT" 2>/dev/null | head -1)
+if [ -z "$DUR" ] || [ "${DUR%%.*}" -lt 1 ]; then
+  echo "[e2e] FAIL: the artifact reports duration='$DUR'"
+  exit 1
+fi
+echo "  video stream: $VSTREAM, ${DUR}s"
 ffprobe -v error -show_entries stream=codec_name,width,height -show_entries format=duration \
   -of default=noprint_wrappers=1 "$OUT" | sed 's/^/  /' | tee "$RUN/ffprobe.txt"
 
