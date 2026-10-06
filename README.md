@@ -158,7 +158,7 @@ than silently degraded, and the body names the field that broke.
 | field | rule |
 |---|---|
 | `model` | must be **the model root the server was started with**. Requesting `ref2va` against an FL2VA server, or sending the generic default while the server runs a partition path, fails with `Model mismatch: request specifies 'X' but server is running 'Y'.` |
-| `seconds` | output duration must be in **[4, 15] s** (a 5.0 s clip is 124 frames after the `17n+5` quantisation) |
+| `seconds` | output duration in **[4, 15] s** by default (higher only with `long_video`). fps is fixed at **24** and the frame count quantises to `17n+5`, so a 5.0 s clip is 124 frames |
 | image parts | `input_references` (**plural**, repeatable). `input_reference` is a separate single-file field, and sending `input_references` together with `input_reference`, `image_reference` or `video_reference` is a 400: `Provide input_references alone, without input_reference, image_reference, or video_reference.` |
 | image formats | JPG, JPEG, PNG, WEBP, HEIC, HEIF |
 | image file size | ≤ **30 MiB** each |
@@ -167,9 +167,9 @@ than silently degraded, and the body names the field that broke.
 | image grid | each validated axis is then rounded to the **32 px** grid |
 | `aspect_ratio` | one of `21:9` `16:9` `4:3` `1:1` `3:4` `9:16` |
 | output short edge | fixed at **768** (`1344x768`); it is the output short edge, not a free parameter |
-| `ref2va` | requires at least one image or video condition, and accepts **at most 9** image references |
-| `t2va` | prompt only |
-| `fl2va` | keyframes as `input_references`: at least one, **at most the first and last**; the keyframe supplies the aspect ratio |
+| `ref2va` | requires at least one image or video condition; at most **9 images**, **3 videos**, **3 standalone audio** references and **12 references total** |
+| `t2va` | prompt only — image, video and audio conditions are all rejected |
+| `fl2va` | keyframes as `input_references`: at least one, **at most the first and last** (2); the keyframe supplies the aspect ratio |
 | `audio_reference` | a JSON string field, `{"audio_url": "data:audio/wav;base64,..."}`; only http(s) or data URLs |
 | partition | `H3_TASK_TYPE` must match the partition the server was started with: Ref2VA serves `ref2va`, FL2VA serves `t2va` and `fl2va` |
 
