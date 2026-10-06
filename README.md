@@ -150,6 +150,34 @@ curl --fail-with-body -X POST http://127.0.0.1:8000/v1/videos/sync \
 
 Output geometry: 1344×768 at 24 fps, frames quantised to `17n+5` (5.0 s → 124 frames).
 
+### Request constraints
+
+These are enforced by the model, so a request that breaks one is rejected with HTTP 400 rather
+than silently degraded, and the body names the field that broke.
+
+| field | rule |
+|---|---|
+| `model` | must be **the model root the server was started with**. Requesting `ref2va` against an FL2VA server, or sending the generic default while the server runs a partition path, fails with `Model mismatch: request specifies 'X' but server is running 'Y'.` |
+| `seconds` | output duration must be in **[4, 15] s** (a 5.0 s clip is 124 frames after the `17n+5` quantisation) |
+| image parts | always the **plural** `input_references` file parts; the singular `input_reference` is a different field, and mixing reference fields is rejected |
+| image formats | JPG, JPEG, PNG, WEBP, HEIC, HEIF |
+| image file size | ≤ **30 MiB** each |
+| image dimensions | both axes in **[256, 5760] px** — `min(width, height) >= 256` and `max(width, height) <= 5760` |
+| image aspect ratio | width/height in **[0.4, 2.5]** |
+| image grid | each validated axis is then rounded to the **32 px** grid |
+| `aspect_ratio` | one of `21:9` `16:9` `4:3` `1:1` `3:4` `9:16` |
+| output short edge | fixed at **768** (`1344x768`); it is the output short edge, not a free parameter |
+| `ref2va` | requires at least one image or video condition, and accepts **at most 9** image references |
+| `t2va` | prompt only |
+| `fl2va` | keyframes as `input_references`: at least one, **at most the first and last**; the keyframe supplies the aspect ratio |
+| `audio_reference` | a JSON string field, `{"audio_url": "data:audio/wav;base64,..."}`; only http(s) or data URLs |
+| partition | `H3_TASK_TYPE` must match the partition the server was started with: Ref2VA serves `ref2va`, FL2VA serves `t2va` and `fl2va` |
+
+Reference images are **not** resized to the output canvas: each is validated against the ranges
+above and its own axes are rounded to the 32 px grid, so its resolution is preserved. Pass a
+reference at the size you want the subject encoded at — an image below 256 px on either axis is
+rejected outright, not upscaled.
+
 ## Measured
 
 All numbers are engine time for 3 warm requests after a cold warmup, 1344×768, 4 steps, one writer
@@ -177,6 +205,7 @@ The wire change accounts for ~4.2 s per clip, the quant policy a further ~0.9 s.
 | `H3_TOPOLOGY` | `tp2usp2` | `tp2usp2` `usp4` `tp4` `tp2usp1` `tp1usp2` |
 | `H3_A2A_PERMUTE` | `0` | `1` enables the permute-free all-to-all (boot-time; requires the LIL NCCL in the image) |
 | `H3_WIRE` | `bf16` | `bf16` (stock vLLM path) or `int8` (lossy a2a + all-reduce transport; see Measured) |
+| `H3_QUANT_CONFIG` | unset | JSON for `--diffusion-quantization-config`, to set precision per layer role instead of per arm, e.g. `{"transformer.*.mlp": {"method": "nvfp4"}, "transformer.*.attn": "mxfp8"}`. Roles it does not name follow `H3_QUANT`. |
 | `H3_A2A_WIRE_BUFCACHE` | `0` | `1` reuses wire buffers; measured to corrupt the output, do not enable |
 | `H3_A2A_QKV_BATCH` | `0` | `1` fuses the per-block q/k/v all-to-all; measured slower, left off |
 | `SOL_ATTN_TAU` | `1.0` | SOL_ATTN sparsity threshold |
