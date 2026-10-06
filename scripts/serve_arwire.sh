@@ -25,7 +25,9 @@ if [ "$H3_NCCL_IMAGE" = "1" ] && [ -f "/opt/venv/lib/python3.12/site-packages/lo
 fi
 
 # Boot-time arms: chosen while the model loads, so changing one is a restart.
-export H3_A2A_PERMUTE=${H3_A2A_PERMUTE:-0}       # 0 = NCCL fallback all-to-all
+# 0 = NCCL fallback all-to-all. The library reads this from parallel_config, so the knob
+# is translated into the official serve flag rather than an H3 env var.
+export H3_A2A_PERMUTE=${H3_A2A_PERMUTE:-0}
 export H3_A2A_WIRE_BUFCACHE=${H3_A2A_WIRE_BUFCACHE:-0}
 
 source "$(dirname "${BASH_SOURCE[0]}")/h3_lane_env.sh"
@@ -86,6 +88,8 @@ echo "    a2a wire=$H3_A2A_WIRE ar wire=$H3_AR_WIRE qkv_batch=$H3_A2A_QKV_BATCH 
 # rejects a mismatch at boot. Empty means no adapter, which the served partition may not support.
 LORA_ARGS=()
 [ -n "${H3_LORA:-}" ] && LORA_ARGS=(--lora-path "$H3_LORA")
+PERMUTE_ARGS=()
+[ "$H3_A2A_PERMUTE" = "1" ] && PERMUTE_ARGS=(--ulysses-a2a-permute)
 
 exec vllm serve "$MODEL" \
   --omni --task-type "$H3_TASK_TYPE" \
@@ -95,4 +99,5 @@ exec vllm serve "$MODEL" \
   --num-gpus $((H3_TP * H3_USP)) --tensor-parallel-size $H3_TP --usp $H3_USP --ring 1 \
   --text-encoder-tp-size $H3_ENC_TP \
   --vae-patch-parallel-size 4 --vae-parallel-mode tile --vae-use-tiling \
+  "${PERMUTE_ARGS[@]}" \
   --diffusion-attention-config "$ATTN"
