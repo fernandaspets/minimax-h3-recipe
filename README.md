@@ -195,6 +195,43 @@ hardware should land in the same band; the int8 arms render byte-identical clips
 
 The wire change accounts for ~4.2 s per clip, the quant policy a further ~0.9 s.
 
+### Serving under concurrency
+
+Client wall: from the HTTP request being issued to the response body being written to disk,
+including connection setup, the multipart upload (prompt and reference images) and the response
+body transfer.
+
+Workload: `ref2va`, 1344x768, 24 fps, 5 s, 4 steps, `flow_shift=12`, `audio_flow_shift=3`,
+seed 1000, `TP2 x USP2`, `H3_QUANT=mxfp8`. One cold warmup, then C simultaneous requests to
+`POST /v1/videos/sync`.
+
+| wire | C | throughput (req/s) | mean (s) | median (s) | p95 (s) | max (s) |
+|---|---|---|---|---|---|---|
+| bf16 | 1 | 0.057 | 17.40 | 17.40 | 17.40 | 17.40 |
+| bf16 | 8 | 0.064 | 71.67 | 71.67 | 120.28 | 125.64 |
+| bf16 | 16 | 0.064 | 134.47 | 134.53 | 239.20 | 250.82 |
+| bf16 | 32 | 0.064 | 258.93 | 258.93 | 475.97 | 499.93 |
+| int8 | 1 | 0.064 | 15.67 | 15.67 | 15.67 | 15.67 |
+| int8 | 8 | 0.073 | 62.95 | 63.00 | 105.37 | 110.07 |
+| int8 | 16 | 0.073 | 117.91 | 117.80 | 209.91 | 220.01 |
+| int8 | 32 | 0.073 | 226.66 | 226.51 | 416.11 | 437.17 |
+
+`wire` is `H3_A2A_WIRE` / `H3_AR_WIRE`. Both arms run `mxfp8`, body `SOL_ATTN`, refiner `B12X`.
+
+### Layout
+
+Base ref2va, 4 steps, 5 s / 1344x768:
+
+| layout | s/step | 4-step render |
+|---|---|---|
+| TP4 x USP1 | 11.75-12.17 | ~60-66 s |
+| TP2 x USP1 | 12.44-13.32 | 68.6 s |
+| TP2 x USP2 | 7.83-8.97 | 47.5 s |
+
+`tp2usp2` needs the encoder-group change carried in this branch. On the stock tree
+`_build_text_encoder_group` builds its group over `range(text_encoder_tp_size)`, which asserts
+whenever the DiT world is TP x SP, so every TP x USP layout fails at startup.
+
 ## Knobs
 
 | variable | default | values |
@@ -203,7 +240,7 @@ The wire change accounts for ~4.2 s per clip, the quant policy a further ~0.9 s.
 | `H3_STEPS` | `4` | `2` `4` `8` — selects the LoRA (the family must match the partition; see WEIGHTS.md); the step count is also sent per request |
 | `H3_TASK_TYPE` | `ref2va` | `ref2va` `t2va` `fl2va` — selects the served partition |
 | `H3_TOPOLOGY` | `tp2usp2` | `tp2usp2` `usp4` `tp4` `tp2usp1` `tp1usp2` |
-| `H3_A2A_PERMUTE` | `0` | `1` enables the permute-free all-to-all (boot-time; requires the LIL NCCL in the image) |
+| `H3_A2A_PERMUTE` | `0` | `1` enables the permute-free all-to-all; passed to the server as `--ulysses-a2a-permute` (boot-time; requires the LIL NCCL in the image) |
 | `H3_WIRE` | `bf16` | `bf16` (stock vLLM path) or `int8` (lossy a2a + all-reduce transport; see Measured) |
 | `H3_QUANT_CONFIG` | unset | JSON for `--diffusion-quantization-config`, to set precision per layer role instead of per arm, e.g. `{"transformer.*.mlp": {"method": "nvfp4"}, "transformer.*.attn": "mxfp8"}`. Roles it does not name follow `H3_QUANT`. |
 | `H3_A2A_WIRE_BUFCACHE` | `0` | `1` reuses wire buffers; measured to corrupt the output, do not enable |
