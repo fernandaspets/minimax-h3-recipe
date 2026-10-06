@@ -159,7 +159,7 @@ than silently degraded, and the body names the field that broke.
 |---|---|
 | `model` | must be **the model root the server was started with**. Requesting `ref2va` against an FL2VA server, or sending the generic default while the server runs a partition path, fails with `Model mismatch: request specifies 'X' but server is running 'Y'.` |
 | `seconds` | output duration must be in **[4, 15] s** (a 5.0 s clip is 124 frames after the `17n+5` quantisation) |
-| image parts | always the **plural** `input_references` file parts; the singular `input_reference` is a different field, and mixing reference fields is rejected |
+| image parts | `input_references` (**plural**, repeatable). `input_reference` is a separate single-file field, and sending `input_references` together with `input_reference`, `image_reference` or `video_reference` is a 400: `Provide input_references alone, without input_reference, image_reference, or video_reference.` |
 | image formats | JPG, JPEG, PNG, WEBP, HEIC, HEIF |
 | image file size | ≤ **30 MiB** each |
 | image dimensions | both axes in **[256, 5760] px** — `min(width, height) >= 256` and `max(width, height) <= 5760` |
