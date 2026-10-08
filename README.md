@@ -253,7 +253,12 @@ H3_LATENT_UPSCALE='{"width":2688,"height":1536}' H3_LATENT_REFINE=0.4 \
 ```
 
 `H3_LATENT_REFINE` is the fraction of steps the second pass re-runs (0.3-0.5 is the usable band;
-1.0 re-samples rather than refines). The pipeline refuses a refine layout above a per-rank token
+1.0 re-samples rather than refines). The pipeline refuses a refine layout above a A refine pass also needs the quantised linears prepared for its row count: H3_MX_CAPACITY raises
+the per-rank prepared capacity (default 40,960 rows, which covers a 1344x768 film scene with
+references; a 2688x1536x10 s refine asks for 148,352 and fails with "rows exceeds the prepared
+capacity" without it). It costs workspace memory, so it is explicit.
+
+per-rank token
 guard - default 65,536, which is a *validated* bound, not a hardware limit - with an error naming the
 exact token count. `H3_LATENT_REFINE_MAX_TOKENS` raises that guard explicitly for a deployment that
 has already run that attention width; 2688x1536x5 s on TP2 x USP2 needs about 77,568 rows/rank, the

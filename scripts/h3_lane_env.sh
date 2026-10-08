@@ -17,6 +17,8 @@
 #   H3_LORA=<file>                  overrides the per-step default; the adapter family must match
 #                                   the partition (ref2v for ref2va, fl2v for t2va/fl2va)
 #   H3_LORA_DIR=<dir>               default /models/h3/turbo
+#   H3_MX_CAPACITY=<rows>           prepared rows per rank for the quantised DiT linears
+#                                   (default 40960; raise for a large latent refine)
 #   H3_REFMOD_PATHS=<a.safetensors:b.safetensors>
 #                                   unset by default; identity adapters are optional
 #   H3_PRINT=1                      resolve and print, then exit without starting anything
@@ -82,6 +84,19 @@ case "$H3_QUANT" in
   *) _h3_die "unknown H3_QUANT='$H3_QUANT' (want mxfp8|hybrid|nvfp4)" ;;
 esac
 
+
+# Prepared capacity of the quantised DiT linears: rows per rank the b12x MXFP8/NVFP4 plans are
+# built for. The default 40,960 covers a 1344x768 film scene with references; a latent-refine
+# pass at a larger target needs proportionally more (2688x1536x10 s asks for 148,352 rows) and
+# fails with "rows exceeds the prepared capacity" without this. Raising it costs workspace
+# memory, so it is explicit rather than automatic.
+if [ -n "${H3_MX_CAPACITY:-}" ]; then
+  case "$H3_MX_CAPACITY" in
+    ''|*[!0-9]*) _h3_die "H3_MX_CAPACITY must be a positive integer (rows per rank)" ;;
+  esac
+  export VLLM_OMNI_DIT_MXFP8_CAPACITY="$H3_MX_CAPACITY"
+  export VLLM_OMNI_DIT_NVFP4_CAPACITY="$H3_MX_CAPACITY"
+fi
 # ------------------------------------------------------------------ step arm
 # The turbo adapters declare a task family and bind only to the matching partition: a ref2v adapter
 # on the FL2VA partition (or an fl2v adapter on Ref2VA) aborts the boot inside lora.py. Select the
