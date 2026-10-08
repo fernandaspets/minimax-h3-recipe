@@ -91,6 +91,19 @@ LORA_ARGS=()
 PERMUTE_ARGS=()
 [ "$H3_A2A_PERMUTE" = "1" ] && PERMUTE_ARGS=(--ulysses-a2a-permute)
 
+# Optional learned latent super-resolution (upstream latent_upscale / latent_refine stage).
+# Off unless H3_LATENT_UPSCALER names a checkpoint inside this container: a lane without it
+# serves exactly as before.
+UPSCALE_ARGS=()
+if [ -n "${H3_LATENT_UPSCALER:-}" ]; then
+  UPSCALE_JSON="{\"latent_upscaler_path\": \"$H3_LATENT_UPSCALER\", \"latent_upscaler_dtype\": \"${H3_LATENT_UPSCALER_DTYPE:-bf16}\""
+  # The pipeline refuses a refine layout above a per-rank token guard (default 65536,
+  # a validated bound rather than a hardware limit). Lift it explicitly for a deployment
+  # that has already run that attention width, never implicitly.
+  [ -n "${H3_LATENT_REFINE_MAX_TOKENS:-}" ] && UPSCALE_JSON="$UPSCALE_JSON, \"latent_refine_max_tokens_per_rank\": ${H3_LATENT_REFINE_MAX_TOKENS}"
+  UPSCALE_ARGS=(--additional-config "$UPSCALE_JSON}")
+fi
+
 exec vllm serve "$MODEL" \
   --omni --task-type "$H3_TASK_TYPE" \
   "${LORA_ARGS[@]}" \
@@ -100,4 +113,5 @@ exec vllm serve "$MODEL" \
   --text-encoder-tp-size $H3_ENC_TP \
   --vae-patch-parallel-size 4 --vae-parallel-mode tile --vae-use-tiling \
   "${PERMUTE_ARGS[@]}" \
+  "${UPSCALE_ARGS[@]}" \
   --diffusion-attention-config "$ATTN"

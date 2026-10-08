@@ -178,6 +178,87 @@ above and its own axes are rounded to the 32 px grid, so its resolution is prese
 reference at the size you want the subject encoded at — an image below 256 px on either axis is
 rejected outright, not upscaled.
 
+## Reference requests on the t2va weights
+
+The reference pipeline does not need the Ref2VA checkpoint. A `ref2va` request is served by the
+Ref2VA transformer only when one is loaded; otherwise it runs on the regular transformer. So the
+reference task can run on the **t2va weights** - the practice the community reports as better
+quality - and the only thing that blocks it by default is the partition manifest, whose task list for
+FL2VA is `["t2va", "fl2va"]`.
+
+Enable it with a wrapper directory that carries the t2va partition and a manifest that also names
+`ref2va`. The components are symlinked, so nothing is duplicated and the original partition is left
+untouched:
+
+```bash
+SRC=/models/MiniMaxAI/MiniMax-H3/FL2VA
+W=/models/MiniMaxAI/MiniMax-H3-refpipe-on-t2va
+mkdir -p "$W/FL2VA"
+cp /models/MiniMaxAI/MiniMax-H3-fl2va/model_index.json "$W/model_index.json"
+for e in "$SRC"/*; do b=$(basename "$e"); [ "$b" = model_index.json ] && continue; \
+  ln -sfn "../../MiniMax-H3/FL2VA/$b" "$W/FL2VA/$b"; done
+python3 - <<'PY'
+import json
+p = "/models/MiniMaxAI/MiniMax-H3-refpipe-on-t2va/FL2VA/model_index.json"
+d = json.load(open("/models/MiniMaxAI/MiniMax-H3/FL2VA/model_index.json"))
+d["_minimax_h3"]["tasks"] = ["t2va", "fl2va", "ref2va"]
+open(p, "w").write(json.dumps(d, indent=2) + "\n")
+PY
+```
+
+Symlinks must be **relative**: with a container mount the host's absolute paths do not exist inside
+the container, and a component that cannot be resolved fails the boot with only
+`Orchestrator initialization failed:` (no cause in the API log).
+
+`scripts/make_ref_on_t2va_wrapper.sh` builds it (idempotent, relative symlinks, refuses a
+broken link); the manual form below is only useful to see what it does. To select the route at
+serve time set `H3_REF_ON_T2VA=1`: it forces the ref2va task type the adapter requires and points
+`MODEL` at the wrapper, so the weights and the task type cannot drift apart.
+
+Serve and request it (the served partition and the request task deliberately differ):
+
+```bash
+MODEL=/models/MiniMaxAI/MiniMax-H3-refpipe-on-t2va H3_TASK_TYPE=fl2va H3_STEPS=4 \
+  bash /opt/h3/scripts/serve_arwire.sh
+
+H3_TASK_TYPE=fl2va H3_REQUEST_TASK=ref2va \
+H3_PROMPT_FILE=/prompts/prompt.txt \
+H3_INPUT_IMAGES=/refs/a.png,/refs/b.png \
+  bash /opt/h3/scripts/request_render.sh out.mp4 4 12.0 3.0 5.0
+```
+
+The turbo adapter is the ref2v family, because the request task is what the adapter binds to.
+
+### Alternative: the `combined` partition
+
+The fork also ships `combined`, which loads the regular FL2VA transformer **and** the Ref2VA
+transformer and routes reference requests to the latter. It is a correct partition but a memory
+decision: on this 4-GPU box each rank then holds one full transformer's worth of both models and the
+boot OOMs at TP2 x USP2 (95 GiB, 107 MiB free); it fits at TP4, which is about 1.7x slower. Use it
+only when the Ref2VA transformer's own weights are wanted.
+
+## Latent upscale (`latent_upscale` / `latent_refine`)
+
+The pipeline can decode a larger frame than it sampled: a learned 3D latent upscaler followed by a
+short low-denoise second pass, both request-level.
+
+```bash
+# serve with the learned upscaler available
+H3_LATENT_UPSCALER=/models/MiniMaxAI/h3-latent-upscaler/minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors \
+  bash /opt/h3/scripts/serve_arwire.sh
+
+# request 1344x768 sampling and a 2688x1536 output
+H3_LATENT_UPSCALE='{"width":2688,"height":1536}' H3_LATENT_REFINE=0.4 \
+  bash /opt/h3/scripts/request_render.sh out.mp4 4 12.0 3.0 5.0
+```
+
+`H3_LATENT_REFINE` is the fraction of steps the second pass re-runs (0.3-0.5 is the usable band;
+1.0 re-samples rather than refines). The pipeline refuses a refine layout above a per-rank token
+guard - default 65,536, which is a *validated* bound, not a hardware limit - with an error naming the
+exact token count. `H3_LATENT_REFINE_MAX_TOKENS` raises that guard explicitly for a deployment that
+has already run that attention width; 2688x1536x5 s on TP2 x USP2 needs about 77,568 rows/rank, the
+width this lane already runs on 9.5 s film scenes.
+
 ## Measured
 
 All numbers are engine time for 3 warm requests after a cold warmup, 1344×768, 4 steps, one writer

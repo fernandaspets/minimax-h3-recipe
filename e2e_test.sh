@@ -35,6 +35,28 @@ H3_PROMPT_FILE=${H3_PROMPT_FILE:-}
 H3_AUDIO_FILE=${H3_AUDIO_FILE:-}
 H3_INPUT_IMAGES=${H3_INPUT_IMAGES:-}
 H3_REFMOD_PATHS=${H3_REFMOD_PATHS:-}
+# Optional learned latent super-resolution. H3_LATENT_UPSCALER is a checkpoint path INSIDE the
+# container; the upscale/refine request knobs are read by scripts/request_render.sh. With
+# H3_EXPECT_WIDTH/HEIGHT set, the receipt asserts the artifact really was enlarged.
+# H3_LORA names the turbo adapter FILE (H3_LORA_DIR is only the default search dir the lane
+# falls back to); forward it so a caller can pin the exact adapter the recipe documents.
+H3_LORA=${H3_LORA:-}
+# Topology reaches the lane through serve_arwire.sh (H3_TOPOLOGY=tp2usp2|tp1usp4|...).
+H3_TOPOLOGY=${H3_TOPOLOGY:-}
+# Serve partition (H3_TASK_TYPE) and request task (H3_REQUEST_TASK) can differ: that is
+# how the combined lane serves the regular partition while taking reference requests.
+H3_REQUEST_TASK=${H3_REQUEST_TASK:-}
+# MODEL overrides the served directory outright: how a wrapper that changes only a partition
+# manifest (for example a t2va lane that also accepts a reference request) gets served.
+MODEL=${MODEL:-}
+H3_LATENT_UPSCALER=${H3_LATENT_UPSCALER:-}
+H3_LATENT_UPSCALER_DTYPE=${H3_LATENT_UPSCALER_DTYPE:-bf16}
+H3_LATENT_UPSCALE=${H3_LATENT_UPSCALE:-}
+H3_LATENT_REFINE=${H3_LATENT_REFINE:-}
+H3_LATENT_REFINE_MAX_TOKENS=${H3_LATENT_REFINE_MAX_TOKENS:-}
+H3_SECONDS=${H3_SECONDS:-5.0}
+H3_EXPECT_WIDTH=${H3_EXPECT_WIDTH:-}
+H3_EXPECT_HEIGHT=${H3_EXPECT_HEIGHT:-}
 
 # Host paths bound into the container, as a space-separated list of docker -v specs. Nothing about
 # the host is assumed; the weights, prompt and reference inputs must be reachable via these mounts.
@@ -100,8 +122,8 @@ docker run -d --name "$NAME" \
   "${MOUNTS[@]}" \
   -e H3_QUANT="$H3_QUANT" -e H3_WIRE="$H3_WIRE" -e H3_STEPS="$H3_STEPS" \
   -e H3_WEIGHTS_SOURCE=local -e H3_TASK_TYPE="$TASK" \
-  -e H3_MODEL_DIR="$H3_MODEL_DIR" -e H3_LORA_DIR="$H3_LORA_DIR" \
-  -e H3_REFMOD_PATHS="$H3_REFMOD_PATHS" \
+  -e H3_MODEL_DIR="$H3_MODEL_DIR" -e H3_LORA_DIR="$H3_LORA_DIR" -e MODEL="$MODEL" -e H3_LORA="$H3_LORA" -e H3_TOPOLOGY="$H3_TOPOLOGY" \
+  -e H3_REFMOD_PATHS="$H3_REFMOD_PATHS" -e H3_LATENT_UPSCALER="$H3_LATENT_UPSCALER" -e H3_LATENT_UPSCALER_DTYPE="$H3_LATENT_UPSCALER_DTYPE" -e H3_LATENT_REFINE_MAX_TOKENS="$H3_LATENT_REFINE_MAX_TOKENS" \
   --entrypoint bash "local/h3kk:$TAG" -lc 'exec bash /opt/h3/scripts/serve_arwire.sh' \
   >/dev/null || { echo "[e2e] FAIL: container did not start"; exit 1; }
 echo "[e2e] container: $(docker inspect -f '{{.State.Status}}' "$NAME")"
@@ -145,8 +167,8 @@ echo "[e2e] rendering task=$TASK"
 OUT="$RUN/clip.mp4"
 docker exec \
   -e H3_TASK_TYPE="$TASK" -e H3_PROMPT_FILE="$H3_PROMPT_FILE" \
-  -e H3_AUDIO_FILE="$H3_AUDIO_FILE" -e H3_INPUT_IMAGES="$H3_INPUT_IMAGES" -e PORT=8000 \
-  "$NAME" bash /opt/h3/scripts/request_render.sh "$OUT" "$H3_STEPS" 12.0 3.0 5.0 2>&1 \
+  -e H3_AUDIO_FILE="$H3_AUDIO_FILE" -e H3_INPUT_IMAGES="$H3_INPUT_IMAGES" -e PORT=8000 -e H3_LATENT_UPSCALE="$H3_LATENT_UPSCALE" -e H3_LATENT_REFINE="$H3_LATENT_REFINE" -e H3_REQUEST_TASK="$H3_REQUEST_TASK" \
+  "$NAME" bash /opt/h3/scripts/request_render.sh "$OUT" "$H3_STEPS" 12.0 3.0 "$H3_SECONDS" 2>&1 \
   | tail -8 | tee "$RUN/request.log"
 REQ_RC=${PIPESTATUS[0]}
 if [ "$REQ_RC" -ne 0 ]; then
@@ -188,6 +210,17 @@ fi
 echo "  video stream: $VSTREAM, ${DUR}s"
 ffprobe -v error -show_entries stream=codec_name,width,height -show_entries format=duration \
   -of default=noprint_wrappers=1 "$OUT" | sed 's/^/  /' | tee "$RUN/ffprobe.txt"
+
+# An ignored upscale stage would still produce a valid clip, so the artifact itself is checked.
+if [ -n "$H3_EXPECT_WIDTH" ] && [ -n "$H3_EXPECT_HEIGHT" ]; then
+  got=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$OUT" 2>/dev/null | head -1)
+  if [ "$got" = "$H3_EXPECT_WIDTH,$H3_EXPECT_HEIGHT" ]; then
+    echo "  UPSCALE: artifact is ${got} as expected"
+  else
+    echo "  UPSCALE: FAIL expected ${H3_EXPECT_WIDTH}x${H3_EXPECT_HEIGHT}, got ${got}"
+    exit 1
+  fi
+fi
 
 # A mosaic/corrupt clip still decodes as some frames; require first and last to differ.
 n=$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 "$OUT" 2>/dev/null | tr -d '\n')

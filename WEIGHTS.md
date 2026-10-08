@@ -54,6 +54,21 @@ They are appended as reference rows in the order given, so that order is a prope
 patchifying, the same treatment the model's own image path applies. Set it to `0` if your latents are
 already normalised.
 
+## Optional - learned latent upscaler (2K delivery)
+
+`minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors` (LBH-123-AI/Minimax_h3_latent_Upscaler) turns
+a sampled H3 latent into a larger one, which `latent_refine` then re-samples at low denoise. Point
+`H3_LATENT_UPSCALER` at it to enable the `latent_upscale` / `latent_refine` request knobs. It is
+trained one normalisation below the pipeline latent, so the loader normalises in and denormalises
+out; feeding it a raw pipeline latent inflates the output about 5x and decodes as a magenta grid.
+
+## Reference requests on the t2va weights (the studio's route)
+
+The reference task can run on the t2va partition instead of the Ref2VA checkpoint: the ref2v
+turbo adapter binds to the *served task type* (ref2va), while the transformer, VAEs and text
+encoder are the t2va partition's. Build the wrapper with
+`scripts/make_ref_on_t2va_wrapper.sh` and select it with `H3_REF_ON_T2VA=1`.
+
 ## Pointing the lane at the weights
 
 ```bash

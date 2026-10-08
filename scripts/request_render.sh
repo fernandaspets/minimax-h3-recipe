@@ -5,7 +5,9 @@
 #
 # Env:
 #   PORT=8000                     server port
-#   H3_TASK_TYPE=ref2va           ref2va | t2va | fl2va   (must match the served partition)
+#   H3_TASK_TYPE=ref2va           request task: ref2va | t2va | fl2va
+#   H3_REQUEST_TASK=<task>        override just the request task; use it to send a ref2va
+#                                 request to a lane served with --task-type combined
 #   H3_PROMPT_FILE=<file>         required - the prompt text
 #   H3_AUDIO_FILE=<wav>           optional - audio conditioning, sent as a data: URL
 #   H3_INPUT_IMAGES=a.jpg,b.jpg   optional - reference images (ref2va) or keyframes (fl2va)
@@ -23,7 +25,7 @@ DUR=${5:-5.0}
 SEC=${DUR%%.*}                        # the seconds field must be a positive integer string
 
 PORT=${PORT:-8000}
-TASK=${H3_TASK_TYPE:-ref2va}
+TASK=${H3_REQUEST_TASK:-${H3_TASK_TYPE:-ref2va}}
 SEED=${SEED:-0}
 WIDTH=${WIDTH:-1344}
 HEIGHT=${HEIGHT:-768}
@@ -52,7 +54,14 @@ if [ -n "${H3_INPUT_IMAGES:-}" ]; then
   done
 fi
 
-ARGS+=(-F "extra_params={\"task\":\"$TASK\",\"duration\":$DUR,\"audio_flow_shift\":$AFLOW}")
+# Optional latent upscale / refine. Same request, larger output: H3_LATENT_UPSCALE takes the
+# upstream sizing spec (2.0, {"scale":2}, {"width":2688,"height":1536}, {"megapixels":4});
+# H3_LATENT_REFINE takes the second-pass strength (0.3-0.5), the img2img fraction of steps.
+EXTRA="{\"task\":\"$TASK\",\"duration\":$DUR,\"audio_flow_shift\":$AFLOW"
+[ -n "${H3_LATENT_UPSCALE:-}" ] && EXTRA="$EXTRA,\"latent_upscale\":$H3_LATENT_UPSCALE"
+[ -n "${H3_LATENT_REFINE:-}" ] && EXTRA="$EXTRA,\"latent_refine\":$H3_LATENT_REFINE"
+EXTRA="$EXTRA}"
+ARGS+=(-F "extra_params=$EXTRA")
 
 echo "[request] task=$TASK steps=$STEPS flow=$FLOW audio_flow=$AFLOW duration=${DUR}s -> $OUT"
 time curl "${ARGS[@]}" -o "$OUT"
